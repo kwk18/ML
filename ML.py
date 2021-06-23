@@ -1,6 +1,7 @@
 import numpy as np
 from collections import Counter, namedtuple
-
+from sklearn import tree
+from scipy.stats import mode
 
 class GaussianNaiveBayesClassifier():
     
@@ -168,30 +169,49 @@ class DTC():
         return node.predicted_class
 
 
-
-class RFC():
-    def __init__(self, max_depth=5, n_trees=10):
-        self.max_depth = max_depth
-        self.n_trees = n_trees
-        self.trees = [None] * n_trees
-
-    def fit(self, X, y):
-        for i in range(self.n_trees):
+class RFC:
+    
+    def __init__(self, n_estimators=2, bootstrap=0.5):
+        self.n_estimators = n_estimators
+        self.bootstrap = bootstrap
+        self.forest = []
+    
+    
+    def fit(self, Xl, yl):
+        X = np.array(Xl)
+        y = np.array(yl)
+        self.forest = []
+        n_samples = len(y)
+        n_sub_samples = round(n_samples*self.bootstrap)
+        
+        for i in range(self.n_estimators):
+            X_subset = X[:n_sub_samples]
+            y_subset = y[:n_sub_samples]
             
-            idx = np.random.choice(X.shape[0], X.shape[0])
-            X, y = X[tuple([idx])], y[tuple([idx])] # bootstrap
-            
-            n_features = np.sqrt(X.shape[1]).astype(int)
-            X = X[:, np.random.choice(X.shape[1], n_features, replace=False)] #crf
-            
-            self.trees[i] = DTC(self.max_depth)
-            self.trees[i].fit(X, y)
-
+            tree_ = tree.DecisionTreeClassifier(max_depth=2)
+            tree_.fit(X_subset, y_subset)
+            self.forest.append(tree_)
+        return self
+    
+    
     def predict(self, X):
-        raw_preds = np.zeros((self.n_trees, X.shape[0]))
-        ans = np.empty(X.shape[0])
-        for i in range(self.n_trees):
-            raw_preds[i] = self.trees[i].predict(X)
-        for i in range(len(ans)):
-            ans[i] = Counter(raw_preds[:, i]).most_common(1)[0][0]
-        return ans.astype(int)
+        n_samples = X.shape[0]
+        n_trees = len(self.forest)
+        predictions = np.empty([n_trees, n_samples])
+        for i in range(n_trees):
+            predictions[i] = self.forest[i].predict(X)
+        
+        return mode(predictions)[0][0]
+    
+    
+    def score(self, Xl, yl):
+        X = np.array(Xl)
+        y = np.array(yl)
+        y_predict = self.predict(X)
+        n_samples = len(y)
+        correct = 0
+        for i in range(n_samples):
+            if y_predict[i] == y[i]:
+                correct = correct + 1
+        accuracy = correct/n_samples
+        return accuracy
